@@ -17,18 +17,14 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 app.use(CookieParser);
 app.use(Auth.createSession);
+app.use(Auth.verifySession);
 
 
-app.get('/',
-  (req, res) => {
-    res.render('login');
-  });
 
 app.get('/login',
   (req, res) => {
     res.render('login');
   });
-
 
 app.get('/signup',
   (req, res) => {
@@ -76,20 +72,17 @@ app.post('/login', (req, res) => {
     });
 });
 
-
-app.get('/create',
+app.get('/logout',
   (req, res) => {
-    res.render('index');
-  });
-
-app.get('/links',
-  (req, res, next) => {
-    models.Links.getAll()
-      .then(links => {
-        res.status(200).send(links);
+    models.Sessions.delete({hash: req.session.hash})
+      .then((data) => {
+        res.clearCookie('shortlyid');
       })
-      .error(error => {
-        res.status(500).send(error);
+      .then((data) => {
+        res.redirect('/login');
+      })
+      .catch((err) => {
+        res.redirect('/login');
       });
   });
 
@@ -97,7 +90,6 @@ app.post('/links',
   (req, res, next) => {
     var url = req.body.url;
     if (!models.Links.isValidUrl(url)) {
-    // send back a 404 if link is not valid
       return res.sendStatus(404);
     }
 
@@ -132,8 +124,38 @@ app.post('/links',
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+app.get('/',
+  (req, res) => {
+    if (req.session.isVerified) {
+      res.render('index');
+    } else {
+      res.redirect('/login');
+    }
+  });
 
+app.get('/create',
+  (req, res) => {
+    if (req.session.isVerified) {
+      res.render('index');
+    } else {
+      res.redirect('/login');
+    }
+  });
 
+app.get('/links',
+  (req, res, next) => {
+    if (req.session.isVerified) {
+      models.Links.getAll()
+        .then(links => {
+          res.status(200).send(links);
+        })
+        .error(error => {
+          res.status(500).send(error);
+        });
+    } else {
+      res.redirect('/login');
+    }
+  });
 
 /************************************************************/
 // Handle the code parameter route last - if all other routes fail
