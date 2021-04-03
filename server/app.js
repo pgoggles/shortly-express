@@ -4,6 +4,7 @@ const utils = require('./lib/hashUtils');
 const partials = require('express-partials');
 const bodyParser = require('body-parser');
 const Auth = require('./middleware/auth');
+const CookieParser = require('./middleware/cookieParser');
 const models = require('./models');
 
 const app = express();
@@ -14,7 +15,8 @@ app.use(partials());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
-
+app.use(CookieParser);
+app.use(Auth.createSession);
 
 
 app.get('/',
@@ -35,15 +37,16 @@ app.get('/signup',
 
 app.post('/signup',
   (req, res) => {
-
     models.Users.create(req.body)
       .then((data) => {
-        res.redirect('/login');
+        return models.Sessions.update({hash: req.session.hash}, {userId: data.insertId});
+      })
+      .then(data => {
+        return res.redirect('/');
       })
       .catch((err) => {
-        res.status(400).render('signup');
+        res.status(400).redirect('/signup');
       });
-    // res.render('signup');
   });
 
 app.post('/login', (req, res) => {
@@ -52,16 +55,24 @@ app.post('/login', (req, res) => {
       if (data) {
         return models.Users.compare(req.body.password, data.password, data.salt);
       } else {
-        return false;
+        throw new Error ('These credentials are not valid.');
       }
     })
     .then((isUser) => {
       if (isUser) {
-        res.render('index');
+        return models.UsersDB.get({username: req.body.username});
       } else {
-        res.render('login');
+        throw new Error ('These credentials are not valid.');
       }
-
+    })
+    .then((data) => {
+      return models.Sessions.update({hash: req.session.hash}, {userId: data.id});
+    })
+    .then((data) => {
+      return res.redirect('/');
+    })
+    .catch((err) => {
+      res.redirect('/login');
     });
 });
 
